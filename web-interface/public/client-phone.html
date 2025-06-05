@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eta-One GPS Tracker</title>
+  <title>Eta-One GPS - Silesia Ring</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -132,11 +132,36 @@
       line-height: 1.4;
     }
     
-    .race-info {
+    .circuit-info {
       font-size: 0.9rem;
       opacity: 0.8;
       margin-top: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 10px;
     }
+    
+    .notification {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      background: #2c3e50;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      transform: translateY(-100px);
+      transition: transform 0.3s ease;
+      z-index: 10000;
+    }
+    
+    .notification.show {
+      transform: translateY(0);
+    }
+    
+    .notification.success { background: #27ae60; }
+    .notification.warning { background: #f39c12; }
+    .notification.error { background: #e74c3c; }
   </style>
 </head>
 <body>
@@ -161,6 +186,11 @@
         <span>Fréquence:</span>
         <span class="metric-value" id="frequency">50ms</span>
       </div>
+      
+      <div class="metric">
+        <span>Points envoyés:</span>
+        <span class="metric-value" id="points-count">0</span>
+      </div>
     </div>
 
     <button id="start-btn">🚀 Démarrer le Tracking</button>
@@ -168,7 +198,7 @@
     
     <div class="status-card">
       <h3 style="margin-top: 0;">📍 Position Actuelle</h3>
-      <div id="status">En attente...</div>
+      <div id="status">En attente de démarrage...</div>
     </div>
 
     <!-- Contrôles de stratégie -->
@@ -182,7 +212,11 @@
         </div>
         <div class="metric">
           <span>Secteur:</span>
-          <span class="metric-value" id="current-sector">1/27</span>
+          <span class="metric-value" id="current-sector">1/25</span>
+        </div>
+        <div class="metric">
+          <span>Temps écoulé:</span>
+          <span class="metric-value" id="elapsed-time">0.0s</span>
         </div>
       </div>
       
@@ -200,15 +234,43 @@
     </div>
 
     <!-- Informations de course -->
-    <div class="race-info">
-      🏆 Circuit: Sosnová (1321m)<br>
-      ⏱️ Objectif: < 81.6s | 📊 Conso: < 50ml
+    <div class="circuit-info">
+      <h4 style="margin-top: 0;">🏆 Circuit Silesia Ring</h4>
+      <div class="metric">
+        <span>Distance:</span>
+        <span>1320m</span>
+      </div>
+      <div class="metric">
+        <span>Secteurs:</span>
+        <span>25</span>
+      </div>
+      <div class="metric">
+        <span>Temps optimal:</span>
+        <span>93.2s</span>
+      </div>
+      <div class="metric">
+        <span>Pays:</span>
+        <span>République Tchèque</span>
+      </div>
     </div>
   </div>
+
+  <!-- Zone de notifications -->
+  <div id="notification" class="notification"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
+    
+    // Configuration du circuit Silesia Ring
+    const circuitSilesia = {
+      nom: "Silesia Ring",
+      pays: "République Tchèque",
+      distance: 1320,
+      secteurs: 25,
+      tempsOptimal: 93.2,
+      centre: [50.529211, 18.093939]
+    };
     
     // Éléments DOM
     const startBtn = document.getElementById('start-btn');
@@ -217,8 +279,10 @@
     const gpsIndicator = document.getElementById('gps-indicator');
     const gpsStatus = document.getElementById('gps-status');
     const accuracySpan = document.getElementById('accuracy');
+    const pointsCountSpan = document.getElementById('points-count');
     const currentStrategySpan = document.getElementById('current-strategy');
     const currentSectorSpan = document.getElementById('current-sector');
+    const elapsedTimeSpan = document.getElementById('elapsed-time');
 
     // Variables globales
     let trackingInterval = null;
@@ -226,6 +290,7 @@
     let currentStrategy = 'normal';
     let positionCount = 0;
     let startTime = null;
+    let lastPosition = null;
 
     // Gestion du tracking
     startBtn.addEventListener('click', startTracking);
@@ -244,14 +309,18 @@
       // Interface
       startBtn.style.display = 'none';
       stopBtn.style.display = 'block';
-      updateGPSStatus('active', 'Actif');
-      updateStatus('🔍 Recherche de position GPS...', 'searching');
+      updateGPSStatus('active', 'Recherche GPS...');
+      updateStatus('🔍 Recherche de position GPS initiale...', 'searching');
 
       // Notification de début de course
       socket.emit('race-start', {
         timestamp: startTime,
-        strategy: currentStrategy
+        strategy: currentStrategy,
+        circuit: 'Silesia Ring'
       });
+
+      // Demander le wake lock pour éviter la veille
+      requestWakeLock();
 
       // Envoi de la position toutes les 50ms (20Hz)
       trackingInterval = setInterval(() => {
@@ -267,6 +336,8 @@
           );
         }
       }, 50);
+
+      showNotification('🚀 Tracking GPS démarré!', 'success');
     }
 
     function stopTracking() {
@@ -288,9 +359,15 @@
       // Notification de fin
       socket.emit('race-stop', {
         timestamp: Date.now(),
-        duration: duration,
-        points: positionCount
+        duration: parseFloat(duration),
+        points: positionCount,
+        circuit: 'Silesia Ring'
       });
+
+      // Libérer le wake lock
+      releaseWakeLock();
+
+      showNotification(`⏹️ Course arrêtée après ${duration}s`, 'warning');
     }
 
     function onPositionSuccess(position) {
@@ -298,15 +375,17 @@
 
       const { latitude, longitude, accuracy } = position.coords;
       positionCount++;
+      lastPosition = { lat: latitude, lon: longitude, timestamp: Date.now() };
       
-      // Données à envoyer
+      // Données à envoyer avec informations Silesia Ring
       const positionData = {
         lat: latitude,
         lon: longitude,
         accuracy: accuracy,
         timestamp: Date.now(),
         strategy: currentStrategy,
-        pointNumber: positionCount
+        pointNumber: positionCount,
+        circuit: 'Silesia Ring'
       };
 
       // Envoi au serveur
@@ -317,24 +396,32 @@
       updateStatus(
         `📍 Lat: ${latitude.toFixed(6)}<br>` +
         `📍 Lon: ${longitude.toFixed(6)}<br>` +
-        `⏱️ Temps: ${elapsed}s | Points: ${positionCount}`, 
+        `⏱️ Temps: ${elapsed}s`, 
         'active'
       );
       
       accuracySpan.textContent = `${accuracy.toFixed(1)}m`;
+      pointsCountSpan.textContent = positionCount;
+      elapsedTimeSpan.textContent = `${elapsed}s`;
+
+      // Premier point GPS reçu
+      if (positionCount === 1) {
+        updateGPSStatus('active', 'Actif');
+        showNotification('📡 Premier point GPS reçu!', 'success');
+      }
     }
 
     function onPositionError(error) {
       let errorMsg = '❌ Erreur GPS: ';
       switch(error.code) {
         case error.PERMISSION_DENIED:
-          errorMsg += 'Permission refusée';
+          errorMsg += 'Permission refusée - Autorisez la géolocalisation';
           break;
         case error.POSITION_UNAVAILABLE:
-          errorMsg += 'Position indisponible';
+          errorMsg += 'Position indisponible - Vérifiez votre GPS';
           break;
         case error.TIMEOUT:
-          errorMsg += 'Timeout';
+          errorMsg += 'Timeout - Signal GPS faible';
           break;
         default:
           errorMsg += 'Erreur inconnue';
@@ -344,12 +431,14 @@
       updateStatus(errorMsg, 'error');
       updateGPSStatus('error', 'Erreur');
       
-      // Arrêter le tracking en cas d'erreur persistante
-      setTimeout(() => {
-        if (error.code === error.PERMISSION_DENIED) {
+      showNotification(errorMsg, 'error');
+      
+      // Arrêter le tracking en cas d'erreur critique
+      if (error.code === error.PERMISSION_DENIED) {
+        setTimeout(() => {
           stopTracking();
-        }
-      }, 2000);
+        }, 3000);
+      }
     }
 
     // Gestion des stratégies
@@ -374,18 +463,14 @@
         from: oldStrategy,
         to: newStrategy,
         timestamp: Date.now(),
-        isTracking: isTracking
+        isTracking: isTracking,
+        circuit: 'Silesia Ring'
       });
       
-      // Feedback visuel
-      if (isTracking) {
-        updateStatus(
-          `🎯 Stratégie changée: ${newStrategy}<br>` +
-          statusDiv.innerHTML.split('<br>').slice(1).join('<br>'), 
-          'strategy-change'
-        );
-      }
+      const strategyEmoji = newStrategy === 'economie' ? '🔋' : 
+                           newStrategy === 'normal' ? '🏃' : '⚡';
       
+      showNotification(`${strategyEmoji} Stratégie: ${newStrategy}`, 'success');
       console.log(`🎯 Stratégie changée: ${oldStrategy} → ${newStrategy}`);
     }
 
@@ -396,12 +481,44 @@
       // Changement de couleur selon le type
       statusDiv.style.color = type === 'error' ? '#ff6b6b' : 
                              type === 'active' ? '#51cf66' :
-                             type === 'strategy-change' ? '#74c0fc' : '#fff';
+                             type === 'searching' ? '#74c0fc' : '#fff';
     }
 
     function updateGPSStatus(status, text) {
       gpsIndicator.className = `status-indicator status-${status}`;
       gpsStatus.textContent = text;
+    }
+
+    function showNotification(message, type = 'info') {
+      const notification = document.getElementById('notification');
+      notification.textContent = message;
+      notification.className = `notification ${type} show`;
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // Gestion du wake lock pour éviter la mise en veille
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('🔒 Wake lock activé - écran maintenu allumé');
+        } catch (err) {
+          console.log('❌ Wake lock échoué:', err);
+        }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+        console.log('🔓 Wake lock libéré');
+      }
     }
 
     // Écoute des messages du serveur
@@ -413,8 +530,8 @@
     });
 
     socket.on('sector-update', (data) => {
-      if (data.sector) {
-        currentSectorSpan.textContent = `${data.sector}/27`;
+      if (data.sector !== undefined) {
+        currentSectorSpan.textContent = `${data.sector + 1}/${circuitSilesia.secteurs}`;
       }
     });
 
@@ -426,15 +543,14 @@
       }
     });
 
-    // Gestion de la reconnexion
     socket.on('connect', () => {
-      console.log('✅ Connecté au serveur');
-      updateStatus('🌐 Connecté au serveur de course', 'connected');
+      console.log('✅ Connecté au serveur Eta-One');
+      showNotification('🌐 Connecté au serveur', 'success');
     });
 
     socket.on('disconnect', () => {
       console.log('❌ Déconnecté du serveur');
-      updateStatus('❌ Connexion perdue avec le serveur', 'error');
+      showNotification('❌ Connexion perdue', 'error');
     });
 
     // Prévenir la fermeture accidentelle pendant le tracking
@@ -446,28 +562,21 @@
       }
     });
 
-    // Gestion de la mise en veille
-    let wakeLock = null;
-    async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          console.log('🔒 Wake lock activé');
-        } catch (err) {
-          console.log('❌ Wake lock échoué:', err);
-        }
+    // Gestion de la visibilité de la page
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && isTracking) {
+        console.log('📱 Page en arrière-plan - tracking continue');
+      } else if (!document.hidden && isTracking) {
+        console.log('📱 Page visible - tracking actif');
       }
-    }
+    });
 
-    // Activer le wake lock quand le tracking commence
-    const originalStartTracking = startTracking;
-    startTracking = function() {
-      originalStartTracking();
-      requestWakeLock();
-    };
+    // Fonction globale pour les boutons
+    window.changeStrategy = changeStrategy;
 
-    console.log('🏁 Eta-One GPS Tracker initialisé');
-    console.log('📱 Version mobile optimisée');
+    console.log('🏁 Eta-One GPS Tracker initialisé pour Silesia Ring');
+    console.log(`📍 Circuit: ${circuitSilesia.nom} (${circuitSilesia.distance}m)`);
+    console.log(`⏱️ Temps optimal: ${circuitSilesia.tempsOptimal}s`);
   </script>
 </body>
 </html>
