@@ -19,7 +19,7 @@ import streamlit as st
 class EtaOneSimulationWrapper:
     """Wrapper pour la simulation Eta-One"""
     
-    def __init__(self, simulation_module_path: str = "modele_simulation_silesia_hybridation.py"):
+    def __init__(self, simulation_module_path: str = "modele_simulation_silesia_hybridation_streamlit.py"):
         """
         Initialise le wrapper avec le chemin vers ton module de simulation
         
