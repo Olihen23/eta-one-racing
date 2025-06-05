@@ -1,0 +1,416 @@
+/* ========================================
+   ETA-ONE RACING - STYLES PARTAGÉS
+   Styles communs pour toutes les interfaces
+   ======================================== */
+
+/* Variables CSS pour cohérence */
+:root {
+  /* Couleurs principales */
+  --primary-blue: #007bff;
+  --primary-green: #28a745;
+  --primary-red: #dc3545;
+  --primary-orange: #fd7e14;
+  --primary-yellow: #ffc107;
+  
+  /* Couleurs de statut */
+  --status-ok: #27ae60;
+  --status-warning: #f39c12;
+  --status-danger: #e74c3c;
+  --status-info: #3498db;
+  
+  /* Couleurs de fond */
+  --bg-primary: rgba(255, 255, 255, 0.95);
+  --bg-secondary: rgba(255, 255, 255, 0.1);
+  --bg-glass: rgba(255, 255, 255, 0.15);
+  
+  /* Couleurs de texte */
+  --text-primary: #2c3e50;
+  --text-secondary: #7f8c8d;
+  --text-light: #ffffff;
+  
+  /* Ombres */
+  --shadow-light: 0 2px 10px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 4px 20px rgba(0, 0, 0, 0.15);
+  --shadow-heavy: 0 8px 32px rgba(0, 0, 0, 0.3);
+  
+  /* Bordures */
+  --border-radius: 12px;
+  --border-radius-small: 8px;
+  --border-light: 1px solid rgba(0, 0, 0, 0.1);
+  
+  /* Transitions */
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  
+  /* Fonts */
+  --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font-size-small: 0.85rem;
+  --font-size-normal: 1rem;
+  --font-size-large: 1.2rem;
+  --font-size-xl: 1.5rem;
+}
+
+/* Reset et base */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Classes utilitaires communes */
+.eta-one-panel {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-medium);
+  border: var(--border-light);
+  backdrop-filter: blur(10px);
+}
+
+.eta-one-panel-glass {
+  background: var(--bg-glass);
+  border-radius: var(--border-radius);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.eta-one-button {
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--border-radius-small);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-medium);
+  font-family: var(--font-family);
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.eta-one-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+}
+
+.eta-one-button:active {
+  transform: translateY(0);
+}
+
+.eta-one-button.primary {
+  background: linear-gradient(135deg, var(--primary-blue), #0056b3);
+  color: var(--text-light);
+}
+
+.eta-one-button.success {
+  background: linear-gradient(135deg, var(--primary-green), #1e7e34);
+  color: var(--text-light);
+}
+
+.eta-one-button.danger {
+  background: linear-gradient(135deg, var(--primary-red), #c82333);
+  color: var(--text-light);
+}
+
+.eta-one-button.warning {
+  background: linear-gradient(135deg, var(--primary-orange), #e17055);
+  color: var(--text-light);
+}
+
+/* Statuts */
+.status-ok {
+  color: var(--status-ok) !important;
+  font-weight: bold;
+}
+
+.status-warning {
+  color: var(--status-warning) !important;
+  font-weight: bold;
+}
+
+.status-danger {
+  color: var(--status-danger) !important;
+  font-weight: bold;
+}
+
+.status-info {
+  color: var(--status-info) !important;
+  font-weight: bold;
+}
+
+/* Indicateurs de statut (points colorés) */
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.active {
+  background-color: var(--status-ok);
+}
+
+.status-indicator.inactive {
+  background-color: var(--text-secondary);
+  animation: none;
+}
+
+.status-indicator.error {
+  background-color: var(--status-danger);
+  animation: pulse-danger 1s infinite;
+}
+
+/* Animations */
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-danger {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToTop {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+/* Notifications communes */
+.eta-one-notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: var(--text-light);
+  padding: 15px 25px;
+  border-radius: var(--border-radius-small);
+  z-index: 10000;
+  font-weight: 500;
+  box-shadow: var(--shadow-heavy);
+  opacity: 0;
+  transition: var(--transition-medium);
+  max-width: 90vw;
+  text-align: center;
+}
+
+.eta-one-notification.show {
+  opacity: 1;
+  animation: slideInFromTop var(--transition-medium);
+}
+
+.eta-one-notification.success {
+  background: var(--status-ok);
+}
+
+.eta-one-notification.warning {
+  background: var(--status-warning);
+}
+
+.eta-one-notification.error {
+  background: var(--status-danger);
+}
+
+.eta-one-notification.info {
+  background: var(--status-info);
+}
+
+/* Métriques communes */
+.eta-one-metric {
+  background: rgba(52, 152, 219, 0.1);
+  padding: 15px;
+  border-radius: var(--border-radius-small);
+  text-align: center;
+  border: 1px solid rgba(52, 152, 219, 0.2);
+  transition: var(--transition-fast);
+}
+
+.eta-one-metric:hover {
+  background: rgba(52, 152, 219, 0.15);
+  transform: translateY(-2px);
+}
+
+.eta-one-metric-value {
+  font-size: var(--font-size-xl);
+  font-weight: bold;
+  color: var(--primary-blue);
+  margin-bottom: 5px;
+}
+
+.eta-one-metric-label {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Grid système */
+.eta-one-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.eta-one-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 15px;
+}
+
+.eta-one-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 15px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .eta-one-grid-3,
+  .eta-one-grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .eta-one-panel {
+    margin: 10px;
+    border-radius: var(--border-radius-small);
+  }
+  
+  .eta-one-button {
+    padding: 10px 15px;
+    font-size: var(--font-size-small);
+  }
+}
+
+@media (max-width: 480px) {
+  .eta-one-grid-2,
+  .eta-one-grid-3,
+  .eta-one-grid-4 {
+    grid-template-columns: 1fr;
+  }
+  
+  .eta-one-notification {
+    left: 10px;
+    right: 10px;
+    transform: none;
+    max-width: none;
+  }
+}
+
+/* Classes spécifiques au circuit */
+.circuit-silesia {
+  border-left: 4px solid #e74c3c;
+}
+
+.circuit-info {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 15px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-small);
+  border: var(--border-light);
+}
+
+/* Classes pour les secteurs */
+.secteur-rapide { color: var(--status-ok); }
+.secteur-moyen { color: var(--primary-orange); }
+.secteur-lent { color: var(--status-warning); }
+.secteur-epingle { color: var(--status-danger); }
+.secteur-ligne-droite { color: #6f42c1; }
+
+/* Loading spinner */
+.eta-one-spinner {
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top: 3px solid var(--primary-blue);
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Utilitaires d'espacement */
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 1rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 1rem; }
+.p-1 { padding: 0.25rem; }
+.p-2 { padding: 0.5rem; }
+.p-3 { padding: 1rem; }
+
+/* Classes pour masquer/afficher selon la taille d'écran */
+.mobile-only { display: none; }
+.desktop-only { display: block; }
+
+@media (max-width: 768px) {
+  .mobile-only { display: block; }
+  .desktop-only { display: none; }
+}
+
+/* Accessibilité */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus styles pour l'accessibilité */
+.eta-one-button:focus,
+button:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+  .eta-one-panel {
+    box-shadow: none;
+    border: 1px solid #000;
+  }
+  
+  .eta-one-button {
+    background: none !important;
+    color: #000 !important;
+    border: 1px solid #000;
+  }
+}
