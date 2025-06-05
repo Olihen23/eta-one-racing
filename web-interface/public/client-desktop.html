@@ -475,7 +475,492 @@
       [50.527746, 18.099628], [50.527741, 18.09964], [50.527736, 18.099652],
       [50.527731, 18.099664], [50.527726, 18.099675], [50.527721, 18.099687],
       [50.527716, 18.099699], [50.527711, 18.099711], [50.527706, 18.099723],
-      [50.527701, 18.099734], [50.527696, 18<!DOCTYPE html>
+      [50.527701, 18.099734], [50.527696, 18.099746],
+      [50.527691, 18.099758], [50.527686, 18.09977], [50.527681, 18.099782],
+      [50.527676, 18.099793], [50.527671, 18.099805], [50.527666, 18.099817],
+      [50.527661, 18.099829], [50.527656, 18.099841], [50.527651, 18.099852],
+      [50.527646, 18.099864], [50.527641, 18.099876], [50.527636, 18.099888],
+      [50.5276, 18.1001], [50.527838, 18.1001], [50.528077, 18.09942],
+      [50.528317, 18.098739], [50.528556, 18.098059], [50.528796, 18.097378],
+      [50.529035, 18.096698], [50.529275, 18.096017] // Retour au point de départ
+    ];
+
+    // Informations générales du circuit
+    const circuitInfo = {
+      nom: "Silesia Ring",
+      pays: "République Tchèque",
+      distance: "1320m",
+      denivele: "3.3m",
+      nb_secteurs: 25,
+      temps_optimal: "93.2s"
+    };
+
+    // Initialisation de la carte
+    const map = L.map('map').setView(circuitConfig.centre, circuitConfig.zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Variables globales de suivi
+    let marker = null;
+    let tempsDepart = null;
+    let secteurActuel = 0;
+    let retardAccumule = 0;
+    let strategieActuelle = 'normal';
+    let multiplicateurVitesse = 1.0;
+    let courseEnCours = false;
+    let gpsPointsCount = 0;
+    let dernierPositionRecu = null;
+    let lastPositionTime = null;
+
+    // Éléments DOM
+    const coordsEl = document.getElementById('coords');
+    const secteurEl = document.getElementById('secteur');
+    const vitesseOptEl = document.getElementById('vitesse-opt');
+    const tempsEl = document.getElementById('temps');
+    const retardEl = document.getElementById('retard');
+    const gpsPointsEl = document.getElementById('gps-points');
+    const gpsAccuracyEl = document.getElementById('gps-accuracy');
+    const vitesseActuelleEl = document.getElementById('vitesse-actuelle');
+    const progressionEl = document.getElementById('progression');
+    const tempsRestantEl = document.getElementById('temps-restant');
+    const raceStatusEl = document.getElementById('race-status');
+    const raceStatusTextEl = document.getElementById('race-status-text');
+    const modeActuelEl = document.getElementById('mode-actuel');
+    const tempsCibleEl = document.getElementById('temps-cible');
+
+    // Dessiner le circuit complet
+    const circuitLine = L.polyline(traceCircuitComplet, {
+      color: '#0066cc',
+      weight: 4,
+      opacity: 0.8
+    }).addTo(map);
+
+    // Ajouter des marqueurs pour les secteurs avec couleurs selon le type
+    function dessinerSecteurs() {
+      circuitConfig.secteurs.forEach(secteur => {
+        let couleur = '#28a745'; // Vert (rapide) par défaut
+        
+        switch(secteur.type) {
+          case 'epingle':
+            couleur = '#dc3545'; // Rouge (très lent)
+            break;
+          case 'lent':
+            couleur = '#fd7e14'; // Orange (lent)
+            break;
+          case 'moyen':
+            couleur = '#ffc107'; // Jaune (moyen)
+            break;
+          case 'rapide':
+            couleur = '#28a745'; // Vert (rapide)
+            break;
+          case 'ligne_droite':
+            couleur = '#6f42c1'; // Violet (ligne droite)
+            break;
+        }
+
+        const circle = L.circle(secteur.debut, {
+          radius: 8,
+          fillColor: couleur,
+          color: couleur,
+          weight: 2,
+          fillOpacity: 0.7
+        }).addTo(map);
+
+        circle.bindPopup(`
+          <strong>Secteur ${secteur.id + 1}/25</strong><br>
+          Type: ${secteur.type}<br>
+          Vitesse optimale: ${secteur.vitesseOptimale} km/h<br>
+          Temps optimal: ${secteur.tempsOptimal}s<br>
+          Longueur: ${secteur.longueur}m<br>
+          Rayon moyen: ${secteur.rayonMoyen}m
+        `);
+      });
+    }
+
+    dessinerSecteurs();
+
+    // Fonctions utilitaires
+    function calculerDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI/180;
+      const φ2 = lat2 * Math.PI/180;
+      const Δφ = (lat2-lat1) * Math.PI/180;
+      const Δλ = (lon2-lon1) * Math.PI/180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+      return R * c;
+    }
+
+    function determinerSecteur(lat, lon) {
+      let secteurProche = 0;
+      let distanceMin = Infinity;
+
+      circuitConfig.secteurs.forEach(secteur => {
+        const distance = calculerDistance(lat, lon, secteur.debut[0], secteur.debut[1]);
+        if (distance < distanceMin) {
+          distanceMin = distance;
+          secteurProche = secteur.id;
+        }
+      });
+
+      return secteurProche;
+    }
+
+    function calculerRetard(lat, lon) {
+      if (!tempsDepart || !courseEnCours) return 0;
+
+      const tempsEcoule = (Date.now() - tempsDepart) / 1000;
+      const nouveauSecteur = determinerSecteur(lat, lon);
+
+      // Calculer le temps optimal jusqu'au secteur actuel
+      let tempsOptimalCumul = 0;
+      for (let i = 0; i <= nouveauSecteur && i < circuitConfig.secteurs.length; i++) {
+        tempsOptimalCumul += circuitConfig.secteurs[i].tempsOptimal * multiplicateurVitesse;
+      }
+
+      const retard = tempsEcoule - tempsOptimalCumul;
+      
+      if (nouveauSecteur !== secteurActuel) {
+        secteurActuel = nouveauSecteur;
+        mettreAJourAffichageSecteur();
+        
+        // Notifier le changement de secteur
+        socket.emit('sector-update', {
+          sector: secteurActuel,
+          timestamp: Date.now()
+        });
+      }
+
+      return retard;
+    }
+
+    function mettreAJourAffichageSecteur() {
+      if (secteurActuel < circuitConfig.secteurs.length) {
+        const secteur = circuitConfig.secteurs[secteurActuel];
+        secteurEl.textContent = `${secteurActuel + 1}/${circuitConfig.secteurs.length}`;
+        vitesseOptEl.textContent = `${Math.round(secteur.vitesseOptimale * multiplicateurVitesse)} km/h`;
+        
+        const progression = ((secteurActuel + 1) / circuitConfig.secteurs.length * 100);
+        progressionEl.textContent = progression.toFixed(0);
+        
+        // Calculer le temps restant optimal
+        let tempsRestantOptimal = 0;
+        for (let i = secteurActuel; i < circuitConfig.secteurs.length; i++) {
+          tempsRestantOptimal += circuitConfig.secteurs[i].tempsOptimal * multiplicateurVitesse;
+        }
+        tempsRestantEl.textContent = tempsRestantOptimal.toFixed(1);
+      }
+    }
+
+    function mettreAJourAffichageRetard(retard) {
+      const retardFormate = (retard >= 0 ? '+' : '') + retard.toFixed(1) + 's';
+      retardEl.textContent = retardFormate;
+
+      // Changer la couleur selon le retard
+      retardEl.className = 'info-value ';
+      if (retard < -2) {
+        retardEl.classList.add('status-ok'); // En avance
+      } else if (retard < 2) {
+        retardEl.classList.add('status-ok'); // Dans les temps
+      } else if (retard < 5) {
+        retardEl.classList.add('status-warning'); // Léger retard
+      } else {
+        retardEl.classList.add('status-danger'); // Retard important
+        
+        // Alerte automatique pour retard critique
+        if (retard > 10 && strategieActuelle === 'normal') {
+          changeStrategy('attaque');
+          showNotification('⚠️ Retard critique détecté! Passage automatique en mode Attaque.', 'warning');
+        }
+      }
+
+      // Mise à jour du statut de course
+      if (retard < 2) {
+        raceStatusEl.className = 'race-status';
+        raceStatusTextEl.textContent = 'Dans les temps';
+      } else if (retard < 5) {
+        raceStatusEl.className = 'race-status warning';
+        raceStatusTextEl.textContent = 'Léger retard';
+      } else {
+        raceStatusEl.className = 'race-status danger';
+        raceStatusTextEl.textContent = 'Retard critique';
+      }
+    }
+
+    function calculerVitesse(lat, lon, timestamp) {
+      if (!dernierPositionRecu || !lastPositionTime) return 0;
+      
+      const distance = calculerDistance(
+        dernierPositionRecu.lat, dernierPositionRecu.lon,
+        lat, lon
+      );
+      
+      const deltaTime = (timestamp - lastPositionTime) / 1000; // en secondes
+      
+      if (deltaTime > 0 && distance > 0.5) { // Ignorer les micro-mouvements
+        const vitesse = (distance / deltaTime) * 3.6; // Conversion m/s -> km/h
+        return Math.min(vitesse, 200); // Cap à 200 km/h pour éviter les aberrations
+      }
+      
+      return 0;
+    }
+
+    function updateMarker(lat, lon, accuracy = null, timestamp = Date.now()) {
+      gpsPointsCount++;
+      
+      // Calculer la vitesse
+      const vitesse = calculerVitesse(lat, lon, timestamp);
+      vitesseActuelleEl.textContent = vitesse.toFixed(0);
+      
+      // Mettre à jour les coordonnées
+      coordsEl.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      gpsPointsEl.textContent = gpsPointsCount;
+      
+      if (accuracy) {
+        gpsAccuracyEl.textContent = `${accuracy.toFixed(1)}m`;
+      }
+
+      // Calculer le retard
+      const retard = calculerRetard(lat, lon);
+      mettreAJourAffichageRetard(retard);
+
+      // Mettre à jour le temps écoulé
+      if (tempsDepart && courseEnCours) {
+        const tempsEcoule = (Date.now() - tempsDepart) / 1000;
+        tempsEl.textContent = `${tempsEcoule.toFixed(1)}s`;
+      }
+
+      // Mettre à jour ou créer le marqueur
+      if (!marker) {
+        marker = L.circleMarker([lat, lon], {
+          radius: 12,
+          fillColor: '#ff0000',
+          color: '#ffffff',
+          weight: 3,
+          fillOpacity: 0.9
+        }).addTo(map);
+        map.panTo([lat, lon]);
+      } else {
+        marker.setLatLng([lat, lon]);
+        map.panTo([lat, lon]);
+      }
+
+      // Changer la couleur du marqueur selon le retard
+      let couleurMarqueur = '#00ff00'; // Vert par défaut
+      if (retard > 5) couleurMarqueur = '#ff0000'; // Rouge si retard
+      else if (retard > 2) couleurMarqueur = '#ffa500'; // Orange si léger retard
+      else if (retard < -2) couleurMarqueur = '#0066ff'; // Bleu si en avance
+      
+      marker.setStyle({ fillColor: couleurMarqueur });
+
+      // Stocker pour le calcul de vitesse suivant
+      dernierPositionRecu = { lat, lon };
+      lastPositionTime = timestamp;
+    }
+
+    // Gestion des stratégies
+    function changeStrategy(nouvelleStrategie) {
+      if (nouvelleStrategie === strategieActuelle) return;
+      
+      const ancienneStrategie = strategieActuelle;
+      strategieActuelle = nouvelleStrategie;
+      
+      // Mettre à jour les multiplicateurs de vitesse
+      switch(nouvelleStrategie) {
+        case 'economie':
+          multiplicateurVitesse = 0.85; // -15% vitesse
+          break;
+        case 'normal':
+          multiplicateurVitesse = 1.0;
+          break;
+        case 'attaque':
+          multiplicateurVitesse = 1.2; // +20% vitesse
+          break;
+      }
+
+      // Mettre à jour l'interface
+      document.querySelectorAll('.strategy-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelector(`.btn-${nouvelleStrategie === 'attaque' ? 'attack' : nouvelleStrategie}`)
+        .classList.add('active');
+      
+      modeActuelEl.textContent = nouvelleStrategie.charAt(0).toUpperCase() + nouvelleStrategie.slice(1);
+      
+      // Recalculer le temps cible
+      const tempsOptimalTotal = circuitConfig.secteurs.reduce((sum, s) => sum + s.tempsOptimal, 0);
+      const tempsCible = tempsOptimalTotal * multiplicateurVitesse;
+      tempsCibleEl.textContent = `${tempsCible.toFixed(1)}s`;
+
+      // Notifier le serveur du changement de stratégie
+      socket.emit('changement-strategie', {
+        from: ancienneStrategie,
+        to: nouvelleStrategie,
+        multiplicateur: multiplicateurVitesse,
+        secteur: secteurActuel,
+        timestamp: Date.now(),
+        circuit: 'Silesia Ring'
+      });
+
+      showNotification(`🎯 Stratégie changée: ${nouvelleStrategie}`, 'success');
+      console.log(`🏁 Stratégie changée: ${ancienneStrategie} → ${nouvelleStrategie} (x${multiplicateurVitesse})`);
+    }
+
+    // Contrôles de course
+    function startRace() {
+      if (courseEnCours) return;
+      
+      courseEnCours = true;
+      tempsDepart = Date.now();
+      secteurActuel = 0;
+      retardAccumule = 0;
+      gpsPointsCount = 0;
+      
+      // Mise à jour interface
+      raceStatusEl.className = 'race-status';
+      raceStatusTextEl.textContent = 'Course en cours';
+      
+      // Notification au serveur
+      socket.emit('race-start', {
+        timestamp: tempsDepart,
+        strategy: strategieActuelle,
+        circuit: 'Silesia Ring'
+      });
+      
+      showNotification('🚀 Course démarrée!', 'success');
+      console.log('🏁 Course démarrée sur Silesia Ring');
+    }
+
+    function stopRace() {
+      if (!courseEnCours) return;
+      
+      courseEnCours = false;
+      const duree = tempsDepart ? (Date.now() - tempsDepart) / 1000 : 0;
+      
+      // Mise à jour interface
+      raceStatusEl.className = 'race-status';
+      raceStatusTextEl.textContent = `Arrêtée (${duree.toFixed(1)}s)`;
+      
+      // Notification au serveur
+      socket.emit('race-stop', {
+        timestamp: Date.now(),
+        duration: duree,
+        points: gpsPointsCount,
+        circuit: 'Silesia Ring'
+      });
+      
+      showNotification(`⏹️ Course arrêtée après ${duree.toFixed(1)}s`, 'warning');
+      console.log(`🏁 Course arrêtée après ${duree.toFixed(1)}s`);
+    }
+
+    function resetRace() {
+      courseEnCours = false;
+      tempsDepart = null;
+      secteurActuel = 0;
+      retardAccumule = 0;
+      gpsPointsCount = 0;
+      dernierPositionRecu = null;
+      lastPositionTime = null;
+      
+      // Reset interface
+      coordsEl.textContent = '--, --';
+      secteurEl.textContent = '--/25';
+      vitesseOptEl.textContent = '-- km/h';
+      tempsEl.textContent = '--';
+      retardEl.textContent = '+0.0s';
+      retardEl.className = 'info-value status-ok';
+      gpsPointsEl.textContent = '0';
+      gpsAccuracyEl.textContent = '-- m';
+      vitesseActuelleEl.textContent = '0';
+      progressionEl.textContent = '0';
+      tempsRestantEl.textContent = '93.2';
+      raceStatusTextEl.textContent = 'En attente';
+      raceStatusEl.className = 'race-status';
+      
+      // Supprimer le marqueur
+      if (marker) {
+        map.removeLayer(marker);
+        marker = null;
+      }
+      
+      socket.emit('race-reset', { circuit: 'Silesia Ring' });
+      showNotification('🔄 Course réinitialisée', 'success');
+      console.log('🔄 Course réinitialisée');
+    }
+
+    // Système de notifications
+    function showNotification(message, type = 'info') {
+      const notification = document.getElementById('notification');
+      notification.textContent = message;
+      notification.className = `notification ${type} show`;
+      
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+
+    // Communication WebSocket
+    socket.emit('requestLatest');
+
+    socket.on('position', (data) => {
+      const { lat, lon, accuracy, timestamp } = data;
+      updateMarker(lat, lon, accuracy, timestamp || Date.now());
+    });
+
+    socket.on('strategy-change', (data) => {
+      console.log('📡 Changement de stratégie reçu:', data);
+      if (data.to && data.to !== strategieActuelle) {
+        changeStrategy(data.to);
+      }
+    });
+
+    socket.on('race-start', (data) => {
+      if (!courseEnCours) {
+        startRace();
+      }
+    });
+
+    socket.on('race-stop', (data) => {
+      if (courseEnCours) {
+        stopRace();
+      }
+    });
+
+    socket.on('race-reset', () => {
+      resetRace();
+    });
+
+    socket.on('connect', () => {
+      console.log('✅ Connecté au serveur');
+      showNotification('🌐 Connecté au serveur', 'success');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Déconnecté du serveur');
+      showNotification('❌ Connexion perdue', 'error');
+    });
+
+    // Fonctions globales pour les boutons
+    window.changeStrategy = changeStrategy;
+    window.startRace = startRace;
+    window.stopRace = stopRace;
+    window.resetRace = resetRace;
+
+    // Initialisation
+    changeStrategy('normal');
+    
+    console.log('🏁 Dashboard Eta-One Racing initialisé!');
+    console.log(`📍 Circuit: ${circuitInfo.nom} (${circuitInfo.distance})`);
+    console.log(`⏱️ Temps optimal: ${circuitInfo.temps_optimal}`);
+    console.log(`🎯 ${circuitConfig.secteurs.length} secteurs configurés`);
+    console.log('✅ Configuration Circuit Silesia Ring chargée');
+  </script>
+</body>
+</html><!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
