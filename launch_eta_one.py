@@ -55,7 +55,7 @@ class EtaOneLauncher:
         
         # Vérification des fichiers
         required_files = [
-            'modele_simulation_silesia_hybridation.py',
+            'modele_simulation_silesia_hybridation_streamlit.py',
             'server.js',
             'public/client-desktop.html',
             'public/client-phone.html'
