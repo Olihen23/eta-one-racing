@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eta-One GPS Tracker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 30px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    h1 {
+      margin-top: 0;
+      font-size: 2rem;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .status-card {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 15px;
+      padding: 20px;
+      margin: 20px 0;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    button {
+      padding: 15px 30px;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 50px;
+      background: linear-gradient(45deg, #28a745, #20c997);
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      margin: 10px 0;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    button:disabled {
+      background: #6c757d;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    button.stop-btn {
+      background: linear-gradient(45deg, #dc3545, #e74c3c);
+    }
+    
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 1.1rem;
+    }
+    
+    .metric-value {
+      font-weight: bold;
+      color: #fff;
+    }
+    
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    
+    .status-active { background-color: #28a745; }
+    .status-inactive { background-color: #6c757d; }
+    .status-error { background-color: #dc3545; }
+    
+    .strategy-info {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 15px;
+      margin: 15px 0;
+      text-align: left;
+    }
+    
+    .strategy-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin: 15px 0;
+    }
+    
+    .strategy-btn {
+      padding: 10px;
+      font-size: 0.9rem;
+      border-radius: 10px;
+      border: 2px solid transparent;
+    }
+    
+    .strategy-btn.active {
+      border-color: #fff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+    
+    .btn-eco { background: linear-gradient(45deg, #28a745, #20c997); }
+    .btn-normal { background: linear-gradient(45deg, #007bff, #0056b3); }
+    .btn-attack { background: linear-gradient(45deg, #dc3545, #c82333); }
+    
+    #status {
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      line-height: 1.4;
+    }
+    
+    .race-info {
+      font-size: 0.9rem;
+      opacity: 0.8;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🏁 Eta-One GPS</h1>
+    
+    <div class="status-card">
+      <div class="metric">
+        <span>Statut GPS:</span>
+        <span class="metric-value">
+          <span id="gps-indicator" class="status-indicator status-inactive"></span>
+          <span id="gps-status">Inactif</span>
+        </span>
+      </div>
+      
+      <div class="metric">
+        <span>Précision:</span>
+        <span class="metric-value" id="accuracy">-- m</span>
+      </div>
+      
+      <div class="metric">
+        <span>Fréquence:</span>
+        <span class="metric-value" id="frequency">50ms</span>
+      </div>
+    </div>
+
+    <button id="start-btn">🚀 Démarrer le Tracking</button>
+    <button id="stop-btn" class="stop-btn" style="display: none;">🛑 Arrêter le Tracking</button>
+    
+    <div class="status-card">
+      <h3 style="margin-top: 0;">📍 Position Actuelle</h3>
+      <div id="status">En attente...</div>
+    </div>
+
+    <!-- Contrôles de stratégie -->
+    <div class="status-card">
+      <h3 style="margin-top: 0;">🎯 Stratégie de Course</h3>
+      
+      <div class="strategy-info">
+        <div class="metric">
+          <span>Mode actuel:</span>
+          <span class="metric-value" id="current-strategy">Normal</span>
+        </div>
+        <div class="metric">
+          <span>Secteur:</span>
+          <span class="metric-value" id="current-sector">1/27</span>
+        </div>
+      </div>
+      
+      <div class="strategy-buttons">
+        <button class="strategy-btn btn-eco" onclick="changeStrategy('economie')">
+          🔋<br>Éco
+        </button>
+        <button class="strategy-btn btn-normal active" onclick="changeStrategy('normal')">
+          🏃<br>Normal
+        </button>
+        <button class="strategy-btn btn-attack" onclick="changeStrategy('attaque')">
+          ⚡<br>Attaque
+        </button>
+      </div>
+    </div>
+
+    <!-- Informations de course -->
+    <div class="race-info">
+      🏆 Circuit: Sosnová (1321m)<br>
+      ⏱️ Objectif: < 81.6s | 📊 Conso: < 50ml
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    // Éléments DOM
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const statusDiv = document.getElementById('status');
+    const gpsIndicator = document.getElementById('gps-indicator');
+    const gpsStatus = document.getElementById('gps-status');
+    const accuracySpan = document.getElementById('accuracy');
+    const currentStrategySpan = document.getElementById('current-strategy');
+    const currentSectorSpan = document.getElementById('current-sector');
+
+    // Variables globales
+    let trackingInterval = null;
+    let isTracking = false;
+    let currentStrategy = 'normal';
+    let positionCount = 0;
+    let startTime = null;
+
+    // Gestion du tracking
+    startBtn.addEventListener('click', startTracking);
+    stopBtn.addEventListener('click', stopTracking);
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        updateStatus('❌ Géolocalisation non supportée par ce navigateur', 'error');
+        return;
+      }
+
+      isTracking = true;
+      startTime = Date.now();
+      positionCount = 0;
+      
+      // Interface
+      startBtn.style.display = 'none';
+      stopBtn.style.display = 'block';
+      updateGPSStatus('active', 'Actif');
+      updateStatus('🔍 Recherche de position GPS...', 'searching');
+
+      // Notification de début de course
+      socket.emit('race-start', {
+        timestamp: startTime,
+        strategy: currentStrategy
+      });
+
+      // Envoi de la position toutes les 50ms (20Hz)
+      trackingInterval = setInterval(() => {
+        if (isTracking) {
+          navigator.geolocation.getCurrentPosition(
+            onPositionSuccess,
+            onPositionError,
+            {
+              enableHighAccuracy: true,
+              maximumAge: 0,
+              timeout: 5000
+            }
+          );
+        }
+      }, 50);
+    }
+
+    function stopTracking() {
+      isTracking = false;
+      
+      if (trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+      }
+
+      // Interface
+      startBtn.style.display = 'block';
+      stopBtn.style.display = 'none';
+      updateGPSStatus('inactive', 'Arrêté');
+      
+      const duration = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : 0;
+      updateStatus(`✅ Tracking arrêté<br>Durée: ${duration}s | Points: ${positionCount}`, 'stopped');
+
+      // Notification de fin
+      socket.emit('race-stop', {
+        timestamp: Date.now(),
+        duration: duration,
+        points: positionCount
+      });
+    }
+
+    function onPositionSuccess(position) {
+      if (!isTracking) return;
+
+      const { latitude, longitude, accuracy } = position.coords;
+      positionCount++;
+      
+      // Données à envoyer
+      const positionData = {
+        lat: latitude,
+        lon: longitude,
+        accuracy: accuracy,
+        timestamp: Date.now(),
+        strategy: currentStrategy,
+        pointNumber: positionCount
+      };
+
+      // Envoi au serveur
+      socket.emit('position', positionData);
+
+      // Mise à jour de l'interface
+      const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : 0;
+      updateStatus(
+        `📍 Lat: ${latitude.toFixed(6)}<br>` +
+        `📍 Lon: ${longitude.toFixed(6)}<br>` +
+        `⏱️ Temps: ${elapsed}s | Points: ${positionCount}`, 
+        'active'
+      );
+      
+      accuracySpan.textContent = `${accuracy.toFixed(1)}m`;
+    }
+
+    function onPositionError(error) {
+      let errorMsg = '❌ Erreur GPS: ';
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          errorMsg += 'Permission refusée';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMsg += 'Position indisponible';
+          break;
+        case error.TIMEOUT:
+          errorMsg += 'Timeout';
+          break;
+        default:
+          errorMsg += 'Erreur inconnue';
+          break;
+      }
+      
+      updateStatus(errorMsg, 'error');
+      updateGPSStatus('error', 'Erreur');
+      
+      // Arrêter le tracking en cas d'erreur persistante
+      setTimeout(() => {
+        if (error.code === error.PERMISSION_DENIED) {
+          stopTracking();
+        }
+      }, 2000);
+    }
+
+    // Gestion des stratégies
+    function changeStrategy(newStrategy) {
+      if (newStrategy === currentStrategy) return;
+      
+      const oldStrategy = currentStrategy;
+      currentStrategy = newStrategy;
+      
+      // Mise à jour interface
+      document.querySelectorAll('.strategy-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      
+      document.querySelector(`.btn-${newStrategy === 'attaque' ? 'attack' : newStrategy}`)
+        .classList.add('active');
+      
+      currentStrategySpan.textContent = newStrategy.charAt(0).toUpperCase() + newStrategy.slice(1);
+      
+      // Notification au serveur
+      socket.emit('strategy-change', {
+        from: oldStrategy,
+        to: newStrategy,
+        timestamp: Date.now(),
+        isTracking: isTracking
+      });
+      
+      // Feedback visuel
+      if (isTracking) {
+        updateStatus(
+          `🎯 Stratégie changée: ${newStrategy}<br>` +
+          statusDiv.innerHTML.split('<br>').slice(1).join('<br>'), 
+          'strategy-change'
+        );
+      }
+      
+      console.log(`🎯 Stratégie changée: ${oldStrategy} → ${newStrategy}`);
+    }
+
+    // Fonctions utilitaires
+    function updateStatus(message, type = 'info') {
+      statusDiv.innerHTML = message;
+      
+      // Changement de couleur selon le type
+      statusDiv.style.color = type === 'error' ? '#ff6b6b' : 
+                             type === 'active' ? '#51cf66' :
+                             type === 'strategy-change' ? '#74c0fc' : '#fff';
+    }
+
+    function updateGPSStatus(status, text) {
+      gpsIndicator.className = `status-indicator status-${status}`;
+      gpsStatus.textContent = text;
+    }
+
+    // Écoute des messages du serveur
+    socket.on('strategy-update', (data) => {
+      console.log('📡 Mise à jour stratégie reçue:', data);
+      if (data.strategy && data.strategy !== currentStrategy) {
+        changeStrategy(data.strategy);
+      }
+    });
+
+    socket.on('sector-update', (data) => {
+      if (data.sector) {
+        currentSectorSpan.textContent = `${data.sector}/27`;
+      }
+    });
+
+    socket.on('race-command', (command) => {
+      if (command === 'start' && !isTracking) {
+        startTracking();
+      } else if (command === 'stop' && isTracking) {
+        stopTracking();
+      }
+    });
+
+    // Gestion de la reconnexion
+    socket.on('connect', () => {
+      console.log('✅ Connecté au serveur');
+      updateStatus('🌐 Connecté au serveur de course', 'connected');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ Déconnecté du serveur');
+      updateStatus('❌ Connexion perdue avec le serveur', 'error');
+    });
+
+    // Prévenir la fermeture accidentelle pendant le tracking
+    window.addEventListener('beforeunload', (e) => {
+      if (isTracking) {
+        e.preventDefault();
+        e.returnValue = 'Le tracking GPS est en cours. Êtes-vous sûr de vouloir quitter ?';
+        return e.returnValue;
+      }
+    });
+
+    // Gestion de la mise en veille
+    let wakeLock = null;
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('🔒 Wake lock activé');
+        } catch (err) {
+          console.log('❌ Wake lock échoué:', err);
+        }
+      }
+    }
+
+    // Activer le wake lock quand le tracking commence
+    const originalStartTracking = startTracking;
+    startTracking = function() {
+      originalStartTracking();
+      requestWakeLock();
+    };
+
+    console.log('🏁 Eta-One GPS Tracker initialisé');
+    console.log('📱 Version mobile optimisée');
+  </script>
+</body>
+</html>
